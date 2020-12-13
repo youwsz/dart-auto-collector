@@ -55,6 +55,7 @@ class OpenDartManager:
             print("corp_code_list cache start : ", datetime.datetime.now())
             corp_code_list = {}
             for line in lines:
+                line = line.replace('\n','')
                 name_and_code = line.split(':');
                 corp_code_list[name_and_code[0]] = name_and_code[1]
             print("corp_code_list cache end : ", datetime.datetime.now())
@@ -116,30 +117,33 @@ class OpenDartManager:
         url = "https://opendart.fss.or.kr/api/fnlttSinglAcntAll.json?"
         performance_table = []
         column_names = ['기업명', '매출액(억원)', '영업이익(억원)', '당기순이익(억원)']
-        target_account_names = ['수익(매출액)', '영업수익', '영업이익(손실)', '당기순이익(손실)']
         for company_name, corp_code in corp_code_list.items():
             # 각 회사별 연결 재무제표 요청
             params = {'crtfc_key': self.__crtfcKey,
                       'corp_code': corp_code,
                       'bsns_year': str(bsns_year),
                       'reprt_code': reprt_code,
-                      'fs_div': "CFS"}  # OFS : 재무제표, CFS : 연결재무제표
+                      'fs_div': "OFS"}  # OFS : 재무제표, CFS : 연결재무제표
             response = requests.get(url, params)
             json_dict = json.loads(response.text)
             data = []
             if json_dict['status'] == "000":
+                # 재무제표가 없을 수 있음
                 data.append(company_name)
                 if 'list' in json_dict:
                     # data list convert
                     for line in json_dict['list']:
                         if line['sj_div'] == 'CIS':  # 포괄손익계산서만 필요함
-                            if line['account_nm'] in target_account_names:
-                                int_data = int(line['thstrm_amount'])
-                                if int_data == 0:
-                                    print(company_name + " : not found thstrm_amount, " + line['account_nm'])
-                                    break
-                                int_data = int_data / 100000000  # 억단위로 변환
-                                data.append(int_data)
+                            if line['account_nm'] in '수익(매출액)' or line['account_nm'] in '영업수익' or\
+                                    line['account_nm'] in '영업이익(손실)' or line['account_nm'] in '당기순이익(손실)':
+
+                                amount_data = ""
+                                if line['thstrm_amount'] != '':
+                                    amount_of_money = int(line['thstrm_amount'])
+                                    amount_of_money = amount_of_money / 100000000  # 억단위로 변환
+                                    amount_data = str(amount_of_money)
+                                data.append(amount_data)
+
                                 if data.__len__() == column_names.__len__():  # 이미 다 찾았으면 그만 찾아
                                     break
             else:
