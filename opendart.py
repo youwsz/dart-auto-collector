@@ -18,16 +18,27 @@ class OpenDartManager:
     __operating_profit_filter = False # 영업이익 적자 필터
     __net_income_filter = False # 당기순이익 적자 필터
     __dict_tickers = {}
+    __base_time = datetime.today()
 
     def __init__(self):
         print("start to get ticker list")
-        today = datetime.today().strftime("%Y%m%d")
-        tickers = stock.get_market_ticker_list(today, market="KOSDAQ")
+        weekday = datetime.today().weekday()
+        today = datetime.today()
+        ## 전날짜기준, 주말은 금요일 기준
+        if weekday == 5:    #토요일
+            today = today - timedelta(days=1)
+        elif weekday == 6:  #일요일
+            today = today - timedelta(days=2)
+        else:
+            today = today - timedelta(days=1)
+        self.__base_time = today.strftime("%Y%m%d")
+
+        tickers = stock.get_market_ticker_list(self.__base_time, market="KOSDAQ")
         for ticker in tickers:
             name = stock.get_market_ticker_name(ticker)
             self.__dict_tickers[name] = ticker
 
-        tickers = stock.get_market_ticker_list(today, market="KOSPI")
+        tickers = stock.get_market_ticker_list(self.__base_time, market="KOSPI")
         for ticker in tickers:
             name = stock.get_market_ticker_name(ticker)
             self.__dict_tickers[name] = ticker
@@ -140,32 +151,39 @@ class OpenDartManager:
     # 기업 시총, 상장주식수 가져오기
     # ret : list [시가총액, 상장주식수]
     def __get_stock_info(self, company_name):
+        try:
+            ## 기업명으로 오늘 날짜 기준 시가총액, 상장주식수  가져오기
+            # 1. 해당 기업명의 네이버 주식코드(티커) 알아오기
+            if company_name not in self.__dict_tickers:
+                return []
 
-        ## 기업명으로 오늘 날짜 기준 시가총액, 상장주식수  가져오기
-        # 1. 해당 기업명의 네이버 주식코드(티커) 알아오기
-        if company_name not in self.__dict_tickers:
+            ticker = self.__dict_tickers[company_name]
+
+            # 2. df = stock.get_market_cap_by_date("20190101", "20190131", "005930") 호출
+            #   df = 날짜, 시가총액, 거래량, 거래대금, 상장주식수
+            stock_df = stock.get_market_cap_by_date(self.__base_time, self.__base_time, ticker)
+
+            # 3. df에서 시가총액 컬럼 series
+            series_cap = stock_df.get("시가총액")
+            if not series_cap.array:
+                print("series_cap erroor")
+
+            market_capitalization = round(int(series_cap.array[0]) / 100, 2)  # 억단위로 변경
+
+            # 4. df에서 발행주식 컬럼 series
+            series_shares = stock_df.get("상장주식수")
+            if not series_shares.array:
+                print("series_shares erroor")
+            listed_shares = series_shares.array[0]
+
+            data = []
+            data.append(market_capitalization)
+            data.append(listed_shares)
+            return data
+
+        except:
+            print("[__get_stock_info] ", company_name," error")
             return []
-
-        ticker = self.__dict_tickers[company_name]
-
-        # 2. df = stock.get_market_cap_by_date("20190101", "20190131", "005930") 호출
-        #   df = 날짜, 시가총액, 거래량, 거래대금, 상장주식수
-        yesterday = (datetime.today() - timedelta(1)).strftime("%Y%m%d")
-        stock_df = stock.get_market_cap_by_date(yesterday, yesterday, ticker)
-
-        # 3. df에서 시가총액 컬럼 series
-        series_cap = stock_df.get("시가총액")
-        market_capitalization = round(int(series_cap.array[0]) / 100, 2)  # 억단위로 변경
-
-        # 4. df에서 발행주식 컬럼 series
-        series_shares = stock_df.get("상장주식수")
-        listed_shares = series_shares.array[0]
-
-        data = []
-        data.append(market_capitalization)
-        data.append(listed_shares)
-
-        return data
 
     # 연결 재무제표 요청
     # ret : list [회사명, 매출액, 영업이익, 당기순이익]
@@ -208,14 +226,23 @@ class OpenDartManager:
         if data.__len__() < num_of_data_to_find:
             return []
 
+        return data
+
     # 연도 - 분기에 해당하는 실적 보고서 데이터 가져오기
     # ret : DataFrame
     def get_performance_table(self, bsns_year, quarter):
+
+        #validation check
+        if self.__dict_tickers.__len__() == 0:
+            print("stock api is disconnected")
+            return pd.DataFrame()
+
+
         print("getPerformanceTable")
         reprt_code = self.__get_report_code(quarter)
         if reprt_code == 0:
             print("__getReportCode fail")
-            return
+            return pd.DataFrame()
 
         corp_code_list = self.__get_corp_code_list()
 
@@ -236,7 +263,7 @@ class OpenDartManager:
             ## 시가총액, 상장주식수
             stock_data = []     #'시가총액', '상장주식수'
             stock_data = self.__get_stock_info(company_name)
-            if not stock_data:    #data empty
+            if not stock_data:    #data empty  #Todo:유가증권 이름과 네이버 증권 이름이 다른 경우가 있다.(ex 네이버증권 : 삼영전자 -> DART : 삼영전자공업)
                 continue
 
             print(company_data, performance_data, "시총 및 주식수 : ", stock_data)
