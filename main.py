@@ -3,7 +3,7 @@ import misc
 
 dartMgr = opendart.OpenDartManager()
 dartMgr.set_filter(True, True)
-misc.toExcel('2020_3Q', dartMgr.get_performance_table(2020, 3))
+misc.toExcel('2020', '3Q', dartMgr.get_performance_table(2020, 3))
 
 
 ##

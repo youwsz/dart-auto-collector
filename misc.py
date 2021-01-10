@@ -6,9 +6,9 @@ from pandas.tests.io.excel.test_xlsxwriter import xlsxwriter
 #########################################################################################
 
 #EXCEL write
-def toExcel(excelName, df):
-        writer = pd.ExcelWriter(excelName + '.xlsx', engine='xlsxwriter')
-        df.to_excel(writer, sheet_name='Sheet1')
+def toExcel(excel_name, write_sheet_name, df):
+        writer = pd.ExcelWriter(excel_name + '.xlsx', engine='xlsxwriter')
+        df.to_excel(writer, sheet_name=write_sheet_name,  index = False)
         writer.close()
 
 #엑셀 key, value 쓰기
