@@ -21,28 +21,50 @@ class OpenDartManager:
     __base_time = datetime.today()
 
     def __init__(self):
-        print("start to get ticker list")
+        print("start to get ticker list : ", datetime.now())
+        cur_folder_path = os.path.dirname(os.path.realpath(__file__))
+        cache_file_path = cur_folder_path + "/ticker_cache.txt"
+
+        ## 전날짜기준, 주말은 금요일 기준
         weekday = datetime.today().weekday()
         today = datetime.today()
-        ## 전날짜기준, 주말은 금요일 기준
-        if weekday == 5:    #토요일
+        if weekday == 5:  # 토요일
             today = today - timedelta(days=1)
-        elif weekday == 6:  #일요일
+        elif weekday == 6:  # 일요일
             today = today - timedelta(days=2)
+        elif weekday == 0:  # 월요일
+            today = today - timedelta(days=3)
         else:
             today = today - timedelta(days=1)
         self.__base_time = today.strftime("%Y%m%d")
 
-        tickers = stock.get_market_ticker_list(self.__base_time, market="KOSDAQ")
-        for ticker in tickers:
-            name = stock.get_market_ticker_name(ticker)
-            self.__dict_tickers[name] = ticker
+        if os.path.exists(cache_file_path):
+            cache_file = open(cache_file_path, "rt")
+            lines = cache_file.readlines()
+            cache_file.close()
 
-        tickers = stock.get_market_ticker_list(self.__base_time, market="KOSPI")
-        for ticker in tickers:
-            name = stock.get_market_ticker_name(ticker)
-            self.__dict_tickers[name] = ticker
-        print("end to get ticker list")
+            for line in lines:
+                line = line.replace('\n','')
+                name_and_code = line.split(':');
+                self.__dict_tickers[name_and_code[0]] = name_and_code[1]
+        else:
+            cache_file = open(cache_file_path, "wt")
+
+            tickers = stock.get_market_ticker_list(self.__base_time, market="KOSDAQ")
+            for ticker in tickers:
+                name = stock.get_market_ticker_name(ticker)
+                self.__dict_tickers[name] = ticker
+                cache_file.write(name + ":" + ticker + "\n")
+
+            tickers = stock.get_market_ticker_list(self.__base_time, market="KOSPI")
+            for ticker in tickers:
+                name = stock.get_market_ticker_name(ticker)
+                self.__dict_tickers[name] = ticker
+                cache_file.write(name + ":" + ticker + "\n")
+            cache_file.close()
+
+        print("end to get ticker list : ", datetime.now())
+
     # 실적 필터링 설정
     def set_filter(self, operating_profit_filter, net_income_filter):
         self.__operating_profit_filter = operating_profit_filter
@@ -88,7 +110,6 @@ class OpenDartManager:
     # 모든 회사의 고유번호 딕셔너리로 가져오기
     # ret : dictionary { corpName : corpCode }
     def __get_corp_code_list(self):
-        print("__getCorpCodeList")
         cur_folder_path = os.path.dirname(os.path.realpath(__file__))
         cache_file_path = cur_folder_path + "/corp_list_cache.txt"
 
